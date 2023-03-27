@@ -5,6 +5,7 @@ import sys;
 conn = None
 cur1 = None
 cur2 = None
+prepRecom = None;
 try:
     # conn = psycopg2.connect(host="localhost",dbname="postgres",user="postgres",password="admin",port=5432)
     conn = psycopg2.connect(host="localhost",dbname="feast_hub_sub",user="iktis",password="",port=5434)
@@ -118,31 +119,39 @@ try:
                 # final_list=pd.concat([final_list, pd.DataFrame(place_exists.groupby('placeID')['overall_rating'].mean())])
         # print(final_list)
         return final_list
+    
 
-    picked_userID=sys.argv[1]
-    specificUserData=data.loc[data['userID'] == picked_userID]
-    if (len(specificUserData.index)>2):  
-        number_of_similar_user=100
-        number_of_top_restaurants=100
-        recommendList= recommendRestaurants(picked_userID,number_of_similar_user,number_of_top_restaurants)
-        df1 = recommendList.rename(columns={'place':'placeID'})
-        joined_frame = df1.merge(df, on='placeID', how='left')
-        #Drop N/A
-        joined_frame_without_NAN=joined_frame.dropna()
-        result=joined_frame_without_NAN.drop('id', axis=1)
-        print(result.to_json(orient='records', indent=2))
-    else:
-        pRestaurants = recommendPopularRestaurants()
-        # join with restaurants
-        popCopyRestaurants = df.copy()
-        # print(popCopyRestaurants)
-        restaurants =  popCopyRestaurants.merge(pRestaurants, on="placeID", how="right")
-        # sort values by asc
-        restaurants = restaurants.sort_values(by='overall_rating', ascending=False)
-        # drop the id column
-        restaurants = restaurants.drop(['id'], axis=1)
-        # convert to json response
-        print(restaurants.to_json(orient='records', indent=2))
+    
+    def start():
+        # check if cache is already full or not
+        if prepRecom is None:
+            # prepare recommendation array
+            
+            print()
+        picked_userID=sys.argv[1]
+        specificUserData=data.loc[data['userID'] == picked_userID]
+        if (len(specificUserData.index)>2):  
+            number_of_similar_user=100
+            number_of_top_restaurants=100
+            recommendList= recommendRestaurants(picked_userID,number_of_similar_user,number_of_top_restaurants)
+            df1 = recommendList.rename(columns={'place':'placeID'})
+            joined_frame = df1.merge(df, on='placeID', how='left')
+            #Drop N/A
+            joined_frame_without_NAN=joined_frame.dropna()
+            result=joined_frame_without_NAN.drop('id', axis=1)
+            print(result.to_json(orient='records', indent=2))
+        else:
+            pRestaurants = recommendPopularRestaurants()
+            # join with restaurants
+            popCopyRestaurants = df.copy()
+            # print(popCopyRestaurants)
+            restaurants =  popCopyRestaurants.merge(pRestaurants, on="placeID", how="right")
+            # sort values by asc
+            restaurants = restaurants.sort_values(by='overall_rating', ascending=False)
+            # drop the id column
+            restaurants = restaurants.drop(['id'], axis=1)
+            # convert to json response
+            print(restaurants.to_json(orient='records', indent=2))
 
 except Exception as error:
     print(error)
