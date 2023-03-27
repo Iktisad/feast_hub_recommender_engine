@@ -31,3 +31,7 @@ Or
 Then install all the dependencies with the following command
 
 > `pip install -r requirements.txt`
+
+# Project corrections
+
+-   [ ] get popular restaurant not working for id U1067, therefore check for all users if popular restaurants are working or not
