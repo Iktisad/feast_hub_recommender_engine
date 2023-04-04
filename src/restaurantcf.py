@@ -9,6 +9,8 @@ class RecommenderEngine:
     __df:pd.DataFrame
     __recommCache:dict = {}
     __currentDbCount: int
+    __merge:pd.DataFrame
+    
     # _dataframeVisitCount:int
 
     def __init__(self):
@@ -17,7 +19,7 @@ class RecommenderEngine:
 
     def __prepareDBData(self):
         # conn = psycopg2.connect(host="localhost",dbname="postgres",user="postgres",password="admin",port=5432)
-        self.__conn = psycopg2.connect(host="localhost",dbname="feast_hub_sub",user="iktis",password="",port=5434)
+        self.__conn = psycopg2.connect(host="localhost",dbname="feast_hub_sub",user="USER",password="",port=5434)
         try:
             cur1 = self.__conn.cursor()
             cur2 = self.__conn.cursor()
@@ -38,7 +40,7 @@ class RecommenderEngine:
             # Using DataFrame.iloc[] to drop last n columns        
             self.__df = self.__df.iloc[:, :-2]
             self.__df.columns=['id','placeID','Rcuisine']
-            
+            self.__merge = pd.merge(self.__data, self.__df , on='placeID')
             self.__currentDbCount = self.__data.size
             # self.__dataframeVisitCount = self.__data.size
             
@@ -54,7 +56,7 @@ class RecommenderEngine:
 
     def __dbVisitCount(self) -> int:
         value: int=0
-        self.__conn = psycopg2.connect(host="localhost",dbname="feast_hub_sub",user="iktis",password="",port=5434)
+        self.__conn = psycopg2.connect(host="localhost",dbname="feast_hub_sub",user="USER",password="",port=5434)
         try:
             cur = self.__conn.cursor()
             cur.execute('SELECT COUNT(*) FROM users_ratings')
@@ -80,22 +82,23 @@ class RecommenderEngine:
         user_similarity_threshold : float =0.3
         #Get top n similar users
         
-        # Matrix Normalization
-        matrix_list = self.__data.pivot_table(index='userID', columns='placeID' , values='overall_rating')
-        matrix_normalization = matrix_list.subtract(matrix_list.mean(axis=1),axis='rows')
-        #Restaurant visited by the target user
-
+        # User Matrix
+        # Create user-item matrix
+        matrix = self.__merge.pivot_table(index='userID', columns='placeID', values='overall_rating')
+        # Normalize user-item matrix
+        matrix_norm = matrix.subtract(matrix.mean(axis=1), axis = 'rows') 
         # User Similarity matrix using Pearson's correlation
-        pr=matrix_normalization.T.corr(method='pearson')
-        similar_users = pr[pr[userID]>user_similarity_threshold][userID].sort_values(ascending=False)[:n]
-        # print(similar_users)
+        user_similarity = matrix_norm.T.corr(method='pearson')
         #Remove picked user Id from the lsit
-        pr.drop(index=userID,inplace=True)
-        userID_visited = matrix_normalization[matrix_normalization.index == userID].dropna(axis=1, how='all')
+        user_similarity.drop(index=userID, inplace=True)     
+        # Get top n similar users
+        similar_users = user_similarity[user_similarity[userID]>user_similarity_threshold][userID].sort_values(ascending=False)[:n]
+        # print(similar_users)      
+        # Places that the target user has visited
+        userID_visited = matrix_norm[matrix_norm.index == userID].dropna(axis=1, how='all')
         # print(userID_visited)
         #Restaurant that similar user visited. Remove restaurants that none of the similar user have visited   
-        similar_user_visits = matrix_normalization[matrix_normalization.index.isin(similar_users.index)].dropna(axis=1, how='all')
-
+        similar_user_visits = matrix_norm[matrix_norm.index.isin(similar_users.index)].dropna(axis=1, how='all')
         # Remove visited restaurant from the list
         similar_user_visits.drop(userID_visited.columns,axis=1, inplace=True, errors='ignore')
 
@@ -132,6 +135,20 @@ class RecommenderEngine:
 
         # Select top m restaurant
         m :int  = number_of_top_restaurants
+        # ranked_item_score.head(m)
+       
+            # Average rating for the picked user
+        avg_rating = matrix[matrix.index == userID].T.mean()[userID]
+
+        # Calcuate the predicted rating
+        ranked_item_score['predicted_rating'] = ranked_item_score['place_score'] + avg_rating
+        ranked_item_score['avg_rating'] = avg_rating
+
+        # Take a look at the data
+        ranked_item_score.head(m)
+
+
+        # Take a look at the data
         return ranked_item_score.head(m)
 
     def __recommendPopularRestaurants(self) -> pd.DataFrame: 
@@ -165,7 +182,7 @@ class RecommenderEngine:
           
         if (len(specificUserData.index)>0):  
             number_of_similar_user: int =100
-            number_of_top_restaurants: int =100
+            number_of_top_restaurants: int =50
             recommendList: pd.DataFrame = self.__recommendRestaurants(userID,number_of_similar_user,number_of_top_restaurants)
             cusines_type: pd.DataFrame = recommendList.rename(columns={'place':'placeID'})
             joined_frame: pd.DataFrame = cusines_type.merge(self.__df, on='placeID', how='left')
