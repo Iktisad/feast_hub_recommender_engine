@@ -30,7 +30,7 @@ Or
 
 Then install all the dependencies with the following command
 
-> `pip install -r requirements.txt`
+> `pip install -r dependencies.txt`
 
 # Project corrections
 
