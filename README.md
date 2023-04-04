@@ -32,6 +32,14 @@ Then install all the dependencies with the following command
 
 > `pip install -r requirements.txt`
 
+## To run the project on debugging mode
+
+> `py app.py`
+
+## Run with flask command
+
+> `flask run`
+
 # Project corrections
 
 -   [ ] get popular restaurant not working for id U1067, therefore check for all users if popular restaurants are working or not

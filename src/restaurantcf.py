@@ -134,7 +134,7 @@ class RecommenderEngine:
         m :int  = number_of_top_restaurants
         return ranked_item_score.head(m)
 
-    def __recommendPopularRestaurants(self):
+    def __recommendPopularRestaurants(self) -> pd.DataFrame: 
         unique_place_list=self.__df['placeID'].unique().tolist()
         final_list= pd.DataFrame(columns=['placeID','overall_rating'])
         for place in unique_place_list:
@@ -146,42 +146,43 @@ class RecommenderEngine:
                 new_row = pd.DataFrame(place_exists.groupby('placeID', as_index=False).mean(numeric_only=True))
                 # print(new_row)
                 final_list = pd.concat([new_row,final_list.loc[:]]).reset_index(drop=True)
-                # print(final_list)
-                # final_list=pd.concat([final_list, pd.DataFrame(place_exists.groupby('placeID')['overall_rating'].mean())])
-        # print(final_list)
-        return final_list
+                
+        # join with restaurants
+        cuisines = self.__df.copy()
+        # print(cuisines)
+        restaurants =  cuisines.merge(final_list, on="placeID", how="right")
+        # sort values by asc
+        restaurants = restaurants.sort_values(by='overall_rating', ascending=False)
+        # drop the id column
+        restaurants = restaurants.drop(['id'], axis=1)
+        return restaurants
     
 
     
     def processRecommendation(self, userID:str):
         
-        specificUserData=self.__data.loc[self.__data['userID'] == userID]
-        
-        
+        specificUserData: pd.DataFrame =self.__data.loc[self.__data['userID'] == userID]
+          
         if (len(specificUserData.index)>0):  
             number_of_similar_user: int =100
             number_of_top_restaurants: int =100
-            recommendList= self.__recommendRestaurants(userID,number_of_similar_user,number_of_top_restaurants)
-            cusines_type = recommendList.rename(columns={'place':'placeID'})
-            joined_frame = cusines_type.merge(self.__df, on='placeID', how='left')
+            recommendList: pd.DataFrame = self.__recommendRestaurants(userID,number_of_similar_user,number_of_top_restaurants)
+            cusines_type: pd.DataFrame = recommendList.rename(columns={'place':'placeID'})
+            joined_frame: pd.DataFrame = cusines_type.merge(self.__df, on='placeID', how='left')
             #Drop N/A
-            joined_frame_without_NAN=joined_frame.dropna()
-            result=joined_frame_without_NAN.drop('id', axis=1)
+            joined_frame_without_NAN: pd.DataFrame =joined_frame.dropna()
+            result: pd.DataFrame =joined_frame_without_NAN.drop('id', axis=1)
             # print(result.to_json(orient='records', indent=2))
-            return result.to_json(orient='records')
+            if len(result.index) > 0:
+                return result.to_json(orient='records')
+            else:
+                return self.__recommendPopularRestaurants().to_json(orient='records')
+            
+        popular_restaurants = self.__recommendPopularRestaurants()
         
-        pRestaurants = self.__recommendPopularRestaurants()
-        # join with restaurants
-        popCopyRestaurants = self.__df.copy()
-        # print(popCopyRestaurants)
-        restaurants =  popCopyRestaurants.merge(pRestaurants, on="placeID", how="right")
-        # sort values by asc
-        restaurants = restaurants.sort_values(by='overall_rating', ascending=False)
-        # drop the id column
-        restaurants = restaurants.drop(['id'], axis=1)
         # convert to json response
         # return restaurants.to_json(orient='records', indent=2)
-        return restaurants.to_json(orient='records')
+        return popular_restaurants.to_json(orient='records')
     
     def __prepareRecommendationCache(self):
         # {U001: [{placeID:1234, rcuisine:"spanish" placeScore: 0.552}]}
@@ -189,12 +190,11 @@ class RecommenderEngine:
         unique_users = self.__data['userID'].unique();
         for user in unique_users:
 
-            self.__recommCache[user] = self.processRecommendation(user);
-            print("user "+ user)
-            print(self.__recommCache[user])
-            print("--------------X----------------")
-        # self.__recommCache['U1067'] = self.getRecommendation('U1067');
-        # print(self.__recommCache)
+            self.__recommCache[user] = self.processRecommendation(user)
+            # print("user "+ user)
+            # print(self.__recommCache[user])
+            # print("--------------X----------------")
+
     
     def getRecommendation(self, userID):
         # query db if number of visit count > currentVisitCount
@@ -208,7 +208,7 @@ class RecommenderEngine:
         return self.processRecommendation(userID)
     
     
-process: RecommenderEngine = RecommenderEngine()
+# process: RecommenderEngine = RecommenderEngine()
 
 # print(process.getRecommendation('U1001'))
 # print(process.processRecommendation('U1047'))

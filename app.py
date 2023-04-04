@@ -1,5 +1,5 @@
 from flask import Flask, jsonify
-from restaurantcf import RecommenderEngine
+from src.restaurantcf import RecommenderEngine
 
 
 app = Flask(__name__)

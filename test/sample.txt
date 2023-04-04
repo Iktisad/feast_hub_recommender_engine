@@ -1,3 +1,5 @@
+will only recommend popular restaurants;
+
 user U1047
 []
 --------------X----------------
