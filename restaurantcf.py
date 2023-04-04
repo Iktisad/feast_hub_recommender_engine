@@ -69,43 +69,35 @@ class RecommenderEngine:
                 self.__conn.close()
         return value
     
-    def __matrix(self):
-        matrix_data= self.__data.pivot_table(index='userID', columns='placeID' , values='overall_rating')
-        return matrix_data
 
-    def __matrixNormalization(self):
-        matrix_list= self.__matrix()
-        matrix_norm=matrix_list.subtract(matrix_list.mean(axis=1),axis='rows')
-        return matrix_norm
+    
 
-    # User Similarity matrix using Pearson's correlation
-    def __pearsonCorrelation(self):
-        matrix_norm = self.__matrixNormalization()
-        user_similarity=matrix_norm.T.corr()
-        return user_similarity
-
-    def __recommendRestaurants(self, picked_userID, number_of_similar_user,number_of_top_restaurants):
-        pr=self.__pearsonCorrelation()
-        picked_userID: str = picked_userID
-        #Remove picked user Id from the lsit
-        pr.drop(index=picked_userID,inplace=True)
+    def __recommendRestaurants(self, userID :str , number_of_similar_user: int,number_of_top_restaurants:int):
 
         # Number of similar users
         n:int = number_of_similar_user
         #User similarity threshold
         user_similarity_threshold : float =0.3
         #Get top n similar users
-        similar_users = pr[pr[picked_userID]>user_similarity_threshold][picked_userID].sort_values(ascending=False)[:n]
-
+        
+        # Matrix Normalization
+        matrix_list = self.__data.pivot_table(index='userID', columns='placeID' , values='overall_rating')
+        matrix_normalization = matrix_list.subtract(matrix_list.mean(axis=1),axis='rows')
         #Restaurant visited by the target user
-        matrix_normalization= self.__matrixNormalization()
-        picked_userID_visited = matrix_normalization[ matrix_normalization.index == picked_userID].dropna(axis=1, how='all')
 
+        # User Similarity matrix using Pearson's correlation
+        pr=matrix_normalization.T.corr(method='pearson')
+        similar_users = pr[pr[userID]>user_similarity_threshold][userID].sort_values(ascending=False)[:n]
+        # print(similar_users)
+        #Remove picked user Id from the lsit
+        pr.drop(index=userID,inplace=True)
+        userID_visited = matrix_normalization[matrix_normalization.index == userID].dropna(axis=1, how='all')
+        # print(userID_visited)
         #Restaurant that similar user visited. Remove restaurants that none of the similar user have visited   
         similar_user_visits = matrix_normalization[matrix_normalization.index.isin(similar_users.index)].dropna(axis=1, how='all')
 
         # Remove visited restaurant from the list
-        similar_user_visits.drop(picked_userID_visited.columns,axis=1, inplace=True, errors='ignore')
+        similar_user_visits.drop(userID_visited.columns,axis=1, inplace=True, errors='ignore')
 
         # A dictionary to store item scores
         item_score = {}
@@ -115,12 +107,13 @@ class RecommenderEngine:
             # Get the ratings for restaurant i
             restaurant_rating = similar_user_visits[i]
             # Create a variable to store the score
-            total = 0
+            total:int = 0
             # Create a variable to store the number of scores
-            count = 0
+            count:int = 0
             # Loop through similar users
             for u in similar_users.index:
                 # If the restaurant has rating
+                # if pd.isna(restaurant_rating[u]) == False:
                 if pd.isna(restaurant_rating[u]) == False:
                     # Score is the sum of user similarity score multiply by the restaurant rating
                     score = similar_users[u] * restaurant_rating[u]
@@ -160,17 +153,17 @@ class RecommenderEngine:
     
 
     
-    def __processRecommendation(self, userID:str):
+    def processRecommendation(self, userID:str):
         
         specificUserData=self.__data.loc[self.__data['userID'] == userID]
         
         
-        if (len(specificUserData.index)>2):  
+        if (len(specificUserData.index)>0):  
             number_of_similar_user: int =100
             number_of_top_restaurants: int =100
             recommendList= self.__recommendRestaurants(userID,number_of_similar_user,number_of_top_restaurants)
-            df1 = recommendList.rename(columns={'place':'placeID'})
-            joined_frame = df1.merge(self.__df, on='placeID', how='left')
+            cusines_type = recommendList.rename(columns={'place':'placeID'})
+            joined_frame = cusines_type.merge(self.__df, on='placeID', how='left')
             #Drop N/A
             joined_frame_without_NAN=joined_frame.dropna()
             result=joined_frame_without_NAN.drop('id', axis=1)
@@ -196,7 +189,10 @@ class RecommenderEngine:
         unique_users = self.__data['userID'].unique();
         for user in unique_users:
 
-            self.__recommCache[user] = self.__processRecommendation(user);
+            self.__recommCache[user] = self.processRecommendation(user);
+            print("user "+ user)
+            print(self.__recommCache[user])
+            print("--------------X----------------")
         # self.__recommCache['U1067'] = self.getRecommendation('U1067');
         # print(self.__recommCache)
     
@@ -209,9 +205,10 @@ class RecommenderEngine:
         # check if user is already in recommendation cache
         if userID in self.__recommCache:
             return self.__recommCache[userID]
-        return self.__processRecommendation(userID)
+        return self.processRecommendation(userID)
     
     
-# process: RecommenderEngine = RecommenderEngine()
+process: RecommenderEngine = RecommenderEngine()
 
-# print(process.getRecommendation('K1001'))
+# print(process.getRecommendation('U1001'))
+# print(process.processRecommendation('U1047'))
